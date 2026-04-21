@@ -1,0 +1,277 @@
+// Uptrail Booking Platform - Database Schema
+// PostgreSQL (Neon) for production
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== TOURS ====================
+
+model Tour {
+  id            String   @id @default(cuid())
+  name          String
+  slug          String   @unique
+  shortDesc     String
+  tagline       String   @default("")
+  story         String   @db.Text
+  moods         Json     @default("[]")
+  difficulty    Int      @default(3)
+  durationDays  Int
+  location      String
+  basePrice     Int
+  featuredImage String
+  gallery       Json     @default("[]")
+  highlights    Json     @default("[]")
+  includes      Json     @default("[]")
+  prepares      Json     @default("[]")
+  notIncluded   Json     @default("[]")
+  policy        Json     @default("{}")
+  summaryStats  Json     @default("{}")
+  safetyPromise String?  @db.Text
+  sortOrder     Int      @default(0)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  leaderId String
+  leader   Leader @relation(fields: [leaderId], references: [id])
+
+  checkpoints TourCheckpoint[]
+  itinerary   TourItinerary[]
+  faqs        TourFaq[]
+  departures  Departure[]
+
+  @@index([slug])
+  @@index([isActive, sortOrder])
+}
+
+model TourCheckpoint {
+  id           String  @id @default(cuid())
+  tourId       String
+  tour         Tour    @relation(fields: [tourId], references: [id], onDelete: Cascade)
+  name         String
+  altitude     String
+  feeling      String
+  image        String?
+  fatigueLevel Int     @default(5)
+  sortOrder    Int     @default(0)
+
+  @@index([tourId])
+}
+
+model TourItinerary {
+  id        String @id @default(cuid())
+  tourId    String
+  tour      Tour   @relation(fields: [tourId], references: [id], onDelete: Cascade)
+  day       String
+  title     String
+  desc      String @db.Text
+  sortOrder Int    @default(0)
+
+  @@index([tourId])
+}
+
+model TourFaq {
+  id        String @id @default(cuid())
+  tourId    String
+  tour      Tour   @relation(fields: [tourId], references: [id], onDelete: Cascade)
+  question  String
+  answer    String @db.Text
+  sortOrder Int    @default(0)
+
+  @@index([tourId])
+}
+
+// ==================== LEADERS ====================
+
+model Leader {
+  id          String  @id @default(cuid())
+  name        String
+  role        String
+  bio         String  @db.Text
+  tripsCount  Int     @default(0)
+  specialties Json    @default("[]")
+  avatar      String
+  rating      Float   @default(5.0)
+  personality Json    @default("[]")
+  feedbacks   Json    @default("[]")
+  isActive    Boolean @default(true)
+
+  tours      Tour[]
+  departures Departure[]
+  articles   Article[]
+}
+
+// ==================== DEPARTURES ====================
+
+model Departure {
+  id         String   @id @default(cuid())
+  tourId     String
+  tour       Tour     @relation(fields: [tourId], references: [id], onDelete: Cascade)
+  leaderId   String?
+  leader     Leader?  @relation(fields: [leaderId], references: [id])
+  startDate  DateTime
+  price      Int
+  slotsTotal Int      @default(20)
+  slotsTaken Int      @default(0)
+  status     String   @default("open")
+  notes      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  bookings Booking[]
+
+  @@index([tourId])
+  @@index([startDate])
+  @@index([status])
+}
+
+// ==================== CUSTOMERS ====================
+
+model Customer {
+  id        String   @id @default(cuid())
+  name      String
+  phone     String
+  email     String?
+  tags      Json     @default("[]")
+  notes     String?  @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  bookings  Booking[]
+  inquiries Inquiry[]
+
+  @@index([phone])
+  @@index([email])
+}
+
+// ==================== BOOKINGS ====================
+
+model Booking {
+  id          String    @id @default(cuid())
+  departureId String
+  departure   Departure @relation(fields: [departureId], references: [id])
+  customerId  String
+  customer    Customer  @relation(fields: [customerId], references: [id])
+  numPeople   Int       @default(1)
+  totalAmount Int       @default(0)
+  amountPaid  Int       @default(0)
+  status      String    @default("pending")
+  note        String?   @db.Text
+  adminNote   String?   @db.Text
+  source      String    @default("website")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  payments Payment[]
+
+  @@index([status])
+  @@index([customerId])
+  @@index([departureId])
+  @@index([createdAt])
+}
+
+// ==================== PAYMENTS ====================
+
+model Payment {
+  id         String   @id @default(cuid())
+  bookingId  String
+  booking    Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  amount     Int
+  method     String   @default("bank_transfer")
+  status     String   @default("pending")
+  proofImage String?
+  note       String?
+  paidAt     DateTime?
+  createdAt  DateTime @default(now())
+
+  @@index([bookingId])
+}
+
+// ==================== INQUIRIES ====================
+
+model Inquiry {
+  id         String    @id @default(cuid())
+  customerId String?
+  customer   Customer? @relation(fields: [customerId], references: [id])
+  name       String
+  contact    String
+  message    String    @db.Text
+  status     String    @default("new")
+  adminNote  String?   @db.Text
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@index([status])
+  @@index([customerId])
+}
+
+// ==================== CONTENT ====================
+
+model Article {
+  id          String   @id @default(cuid())
+  title       String
+  slug        String   @unique
+  excerpt     String
+  content     String   @db.Text
+  coverImage  String
+  authorId    String
+  author      Leader   @relation(fields: [authorId], references: [id])
+  category    String   @default("guide")
+  tags        Json     @default("[]")
+  seoTitle    String?
+  seoDesc     String?
+  isPublished Boolean  @default(true)
+  publishedAt DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([slug])
+  @@index([category])
+}
+
+model Testimonial {
+  id        String  @id @default(cuid())
+  name      String
+  tourName  String
+  comment   String  @db.Text
+  avatar    String
+  isActive  Boolean @default(true)
+  sortOrder Int     @default(0)
+}
+
+model Category {
+  id        String @id @default(cuid())
+  label     String
+  icon      String
+  desc      String
+  sortOrder Int    @default(0)
+}
+
+// ==================== SITE CONFIG ====================
+
+model SiteConfig {
+  id        String   @id @default("main")
+  key       String   @unique
+  value     String   @db.Text
+  updatedAt DateTime @updatedAt
+}
+
+// ==================== AUTH ====================
+
+model User {
+  id        String   @id @default(cuid())
+  username  String   @unique
+  password  String
+  role      String   @default("editor")
+  name      String
+  avatar    String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
